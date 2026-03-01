@@ -8,7 +8,7 @@ import java.util.*;
 @Service
 public class YoutubeService {
 
-    @Value("${YOUTUBE_API_KEY:${youtube.api.key:}}")
+    @Value("${YOUTUBE_API_KEY}")
     private String apiKey;
 
     private final WebClient webClient = WebClient.builder()
@@ -17,10 +17,6 @@ public class YoutubeService {
 
     @SuppressWarnings("unchecked")
     public List<Map<String, Object>> search(String query) {
-        if (apiKey == null || apiKey.isEmpty()) {
-            System.err.println("ERROR: YouTube API key is not configured!");
-            return List.of(Map.of("error", "YouTube API key not configured"));
-        }
         try {
             Map<String, Object> response = webClient.get()
                     .uri(uri -> uri.path("/search")
@@ -36,12 +32,8 @@ public class YoutubeService {
                     .block();
 
             if (response == null) return List.of();
-
             List<Map<String, Object>> items = (List<Map<String, Object>>) response.get("items");
-            if (items == null) {
-                System.err.println("YouTube API returned no items. Response: " + response);
-                return List.of();
-            }
+            if (items == null) return List.of();
 
             List<Map<String, Object>> results = new ArrayList<>();
             for (Map<String, Object> item : items) {
@@ -50,7 +42,6 @@ public class YoutubeService {
                     Map<String, Object> snippet = (Map<String, Object>) item.get("snippet");
                     Map<String, Object> thumbs  = (Map<String, Object>) snippet.get("thumbnails");
                     Map<String, Object> medium  = (Map<String, Object>) thumbs.get("medium");
-
                     results.add(Map.of(
                             "youtubeId", id.get("videoId"),
                             "title",     snippet.get("title"),
@@ -71,7 +62,6 @@ public class YoutubeService {
 
     @SuppressWarnings("unchecked")
     public Map<String, Object> getVideo(String videoId) {
-        if (apiKey == null || apiKey.isEmpty()) return Map.of();
         try {
             Map<String, Object> response = webClient.get()
                     .uri(uri -> uri.path("/videos")
@@ -97,7 +87,6 @@ public class YoutubeService {
                     "duration",  details.get("duration")
             );
         } catch (Exception e) {
-            System.err.println("YouTube getVideo error: " + e.getMessage());
             return Map.of();
         }
     }
