@@ -8,7 +8,7 @@ import java.util.*;
 @Service
 public class YoutubeService {
 
-    @Value("${youtube.api.key}")
+    @Value("${YOUTUBE_API_KEY:${youtube.api.key:}}")
     private String apiKey;
 
     private final WebClient webClient = WebClient.builder()
@@ -17,13 +17,17 @@ public class YoutubeService {
 
     @SuppressWarnings("unchecked")
     public List<Map<String, Object>> search(String query) {
+        if (apiKey == null || apiKey.isEmpty()) {
+            System.err.println("ERROR: YouTube API key is not configured!");
+            return List.of(Map.of("error", "YouTube API key not configured"));
+        }
         try {
             Map<String, Object> response = webClient.get()
                     .uri(uri -> uri.path("/search")
                             .queryParam("part", "snippet")
                             .queryParam("q", query + " official audio")
                             .queryParam("type", "video")
-                            .queryParam("videoCategoryId", "10") // Music category
+                            .queryParam("videoCategoryId", "10")
                             .queryParam("maxResults", "8")
                             .queryParam("key", apiKey)
                             .build())
@@ -31,31 +35,43 @@ public class YoutubeService {
                     .bodyToMono(Map.class)
                     .block();
 
+            if (response == null) return List.of();
+
             List<Map<String, Object>> items = (List<Map<String, Object>>) response.get("items");
+            if (items == null) {
+                System.err.println("YouTube API returned no items. Response: " + response);
+                return List.of();
+            }
+
             List<Map<String, Object>> results = new ArrayList<>();
-
             for (Map<String, Object> item : items) {
-                Map<String, Object> id      = (Map<String, Object>) item.get("id");
-                Map<String, Object> snippet = (Map<String, Object>) item.get("snippet");
-                Map<String, Object> thumbs  = (Map<String, Object>) snippet.get("thumbnails");
-                Map<String, Object> medium  = (Map<String, Object>) thumbs.get("medium");
+                try {
+                    Map<String, Object> id      = (Map<String, Object>) item.get("id");
+                    Map<String, Object> snippet = (Map<String, Object>) item.get("snippet");
+                    Map<String, Object> thumbs  = (Map<String, Object>) snippet.get("thumbnails");
+                    Map<String, Object> medium  = (Map<String, Object>) thumbs.get("medium");
 
-                results.add(Map.of(
-                        "youtubeId", id.get("videoId"),
-                        "title",     snippet.get("title"),
-                        "artist",    snippet.get("channelTitle"),
-                        "thumbnail", medium.get("url"),
-                        "duration",  "0:00" // fetch separately if needed
-                ));
+                    results.add(Map.of(
+                            "youtubeId", id.get("videoId"),
+                            "title",     snippet.get("title"),
+                            "artist",    snippet.get("channelTitle"),
+                            "thumbnail", medium.get("url"),
+                            "duration",  "0:00"
+                    ));
+                } catch (Exception e) {
+                    System.err.println("Error parsing item: " + e.getMessage());
+                }
             }
             return results;
         } catch (Exception e) {
-            return List.of(); // return empty on error
+            System.err.println("YouTube search error: " + e.getMessage());
+            return List.of();
         }
     }
 
     @SuppressWarnings("unchecked")
     public Map<String, Object> getVideo(String videoId) {
+        if (apiKey == null || apiKey.isEmpty()) return Map.of();
         try {
             Map<String, Object> response = webClient.get()
                     .uri(uri -> uri.path("/videos")
@@ -78,9 +94,10 @@ public class YoutubeService {
                     "youtubeId", videoId,
                     "title",     snippet.get("title"),
                     "artist",    snippet.get("channelTitle"),
-                    "duration",  details.get("duration") // ISO 8601 e.g. PT3M42S
+                    "duration",  details.get("duration")
             );
         } catch (Exception e) {
+            System.err.println("YouTube getVideo error: " + e.getMessage());
             return Map.of();
         }
     }
